@@ -32,8 +32,6 @@ ADD docker-entrypoint.sh /bin/crowd
 
 ADD scripts/main /main
 ADD scripts/vars /vars
-ADD scripts/tomcat-configurator    /tomcat-configurator
-ADD scripts/timezone-configurator  /timezone-configurator
 ADD scripts/crowd-configurator     /crowd-configurator
 ADD scripts/crowd-sso-configurator /crowd-sso-configurator
 
