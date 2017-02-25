@@ -7,17 +7,23 @@ crowd_setup_step_in_config() {
 }
 
 crowd_setup_step() {
-  local step
-  [[ -z "$CROWD_SERVER_ID"                     ]] || step=setuplicense
-  [[ -z "$CROWD_LICENSE_KEY"                   ]] || step=installtype
-  [[ ! -f "$CROWD_HOME/crowd.properties"       ]] || step=setupdatabase
+  local step=setuplicense
+  if [[ "${CROWD_SERVER_ID:+x}" ]]; then
+    if [[ "${CROWD_LICENSE:+x}" ]]; then
+      if [[ -f "$CROWD_HOME/crowd.properties" ]]; then
+        step=setupdatabase
+      else
+        step=installtype
+      fi
+    fi
+  fi
   echo "$step"
 }
 
 crowd_setup_type() {
   local type=install.new
-  [[ ! "$(crowd_setup_step)" = "setuplicense"  ]] || type=install
-  [[ ! "$(crowd_setup_step)" = "installtype"   ]] || type=install
+  [[ ! "$(crowd_setup_step)" = "setuplicense" ]] || type=install
+  [[ ! "$(crowd_setup_step)" = "installtype"  ]] || type=install
   echo "$type"
 }
 
@@ -32,7 +38,7 @@ create_crowd_config() {
   <buildNumber>0</buildNumber>
   <properties>
     $(property crowd.server.id $CROWD_SERVER_ID   )
-    $(property license         $CROWD_LICENSE_KEY )
+    $(property license         $CROWD_LICENSE )
   </properties>
   <setupStep>$(crowd_setup_step)</setupStep>
   <setupType>$(crowd_setup_type)</setupType>
@@ -51,6 +57,8 @@ create_crowd_home() {
 }
 
 create_crowd_autoconfigure() {
+  [[ "$CROWD_SERVER_ID" ]] || return 0
+  [[ "$CROWD_LICENSE" ]] || return 0
   [[ "$(crowd_setup_step)" = "setupdatabase" ]] || return 0
   [[ "$CROWD_SETUP" = "true" ]] || return 0
   [[ ! "$(crowd_setup_step_in_config)" = "finishsetup" ]] || return 0

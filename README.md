@@ -12,6 +12,10 @@ Connectors may be configured through the following variable scheme:
 
 ### Atlassian Crowd
 
+- `CROWD_SERVER_ID` to assign the server id.
+- `CROWD_LICENSE` to assign the license string (newlines may be omitted)
+- `CROWD_SETUP` (default: `true`) checks if crowd has been setup or automating the setup wizard otherwise.
+
 Support for Crowd is almost complete. For a list of available environment variables see [scripts/vars](scripts/vars).
 
 ### Atlassian Crowd SSO
