@@ -1,0 +1,22 @@
+#!sh
+
+printenv | grep CROWD_SSO_ | cut -f3 -d_ | sort | uniq | while read application; do
+	properties_var="CROWD_SSO_PROPERTIES_$application"
+	properties="${!properties_var}"
+	properties="$(realpath "$properties" 2>/dev/null || echo "$properties")"
+	overwrite_var="CROWD_SSO_PROPERTIES_${application}_OVERWRITE"
+	overwrite="${!overwrite_var}"
+	[[ "$properties" ]] || continue
+	$overwrite || continue
+	[[ ! "$application" = "CROWD" ]] \
+	|| [[ ! -f "$properties" ]] \
+	|| [[ ! "$CROWD_SSO_CROWD_APPLICATION_PASSWORD" = "password" ]] \
+	|| continue
+	echo -e "\e[1mCrowd SSO\e[0m \e[32mApplication\e[0m \e[1m$application\e[0m => $properties"
+	printenv | grep CROWD_SSO_${application} | cut -f4- -d_ | while read var; do
+		  val="${var#*=}"
+		  var="${var%%=*}"
+		  var="$(echo $var | sed -e 's/_/./g' | tr '[:upper:]' '[:lower:]')"
+		  echo "$var=$val"
+	done | install -D -m 0644 -o crowd -g crowd /dev/stdin "$properties"
+done

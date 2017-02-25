@@ -1,0 +1,17 @@
+#!sh
+
+set -eo pipefail
+[[ -z "$TRACE" ]] || set -x
+
+command -v "$1" >/dev/null 2>&1 && exec "$@"
+set -- 
+. tomcat-configurator
+. timezone-configurator
+. log4j-configurator
+. crowd-sso-configurator
+. crowd-configurator
+
+. environment-hygiene
+
+echo /usr/bin/env - "$@"
+exec /usr/bin/env - "$@"
