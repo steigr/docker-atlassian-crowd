@@ -1,5 +1,10 @@
 # Atlassian Crowd SSO
 
+[![](https://images.microbadger.com/badges/image/steigr/atlassian-crowd.svg)](http://microbadger.com/images/steigr/atlassian-crowd "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/steigr/atlassian-crowd.svg)](http://microbadger.com/images/steigr/atlassian-crowd "Get your own version badge on microbadger.com")
+[![](https://images.microbadger.com/badges/commit/steigr/atlassian-crowd.svg)](http://microbadger.com/images/steigr/atlassian-crowd "Get your own commit badge on microbadger.com")
+
+
 - Based on [alpinelinux with Oracle JRE](http://hub.docker.com/r/anapsix/alpine-java)
 
 ## Configuration
