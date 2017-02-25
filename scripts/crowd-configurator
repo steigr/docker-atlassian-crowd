@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+
+crowd_setup_step_in_config() {
+  [[ ! -f "$CROWD_HOME"/crowd.cfg.xml ]] \
+  || grep setupStep "$CROWD_HOME"/crowd.cfg.xml \
+  | cut -f2 -d'>' | cut -f1 -d'<'
+}
+
+crowd_setup_step() {
+  local step
+  [[ -z "$CROWD_SERVER_ID"                     ]] || step=setuplicense
+  [[ -z "$CROWD_LICENSE_KEY"                   ]] || step=installtype
+  [[ ! -f "$CROWD_HOME/crowd.properties"       ]] || step=setupdatabase
+  echo "$step"
+}
+
+crowd_setup_type() {
+  local type=install.new
+  [[ ! "$(crowd_setup_step)" = "setuplicense"  ]] || type=install
+  [[ ! "$(crowd_setup_step)" = "installtype"   ]] || type=install
+  echo "$type"
+}
+
+property() {
+  [[ -z "${2:+x}" ]] || echo "<property name=\"$1\">$2</property>"
+}
+
+create_crowd_config() {
+	[[ -f "$CROWD_HOME"/crowd.cfg.xml ]] || install -D -m 0640 -o crowd -g crowd /dev/stdin "$CROWD_HOME"/crowd.cfg.xml <<create_crowd_config
+<?xml version="1.0" encoding="UTF-8"?>
+<application-configuration>
+  <buildNumber>0</buildNumber>
+  <properties>
+    $(property crowd.server.id $CROWD_SERVER_ID   )
+    $(property license         $CROWD_LICENSE_KEY )
+  </properties>
+  <setupStep>$(crowd_setup_step)</setupStep>
+  <setupType>$(crowd_setup_type)</setupType>
+</application-configuration>
+create_crowd_config
+}
+
+fix_permissions() {
+	chown crowd "$CATALINA_HOME/../database" "$CATALINA_HOME/work" "$CATALINA_HOME/logs" "$CATALINA_HOME/../.oracle_jre_usage"
+	chmod 1777 /tmp
+}
+
+create_crowd_home() {
+  [[ -d "$CROWD_HOME" ]] || install -D -d -m 0750 -o crowd -g crowd "$CROWD_HOME"
+  chown -R crowd "$CROWD_HOME"
+}
+
+create_crowd_autoconfigure() {
+  [[ "$(crowd_setup_step)" = "setupdatabase" ]] || return 0
+  [[ "$CROWD_SETUP" = "true" ]] || return 0
+  [[ ! "$(crowd_setup_step_in_config)" = "finishsetup" ]] || return 0
+  [[ ! "$(crowd_setup_step_in_config)" = "complete" ]] || return 0
+  echo -e "\e[1mCrowd Setup\e[0m \e[32mAutoconfiguration\e[0m"
+  apk add --no-cache --virtual .setup-deps openrc curl
+  start-stop-daemon -S -x "$(realpath "$PWD/${BASH_SOURCE[0]}")" -b
+}
+
+main() {
+  exec >/proc/1/fd/1 2>/proc/1/fd/2
+  set -eo pipefail
+  sleep 10
+  base_url=http://localhost:8095/crowd
+  url=$base_url/console/login.action
+  while true; do
+    action=$(curl -s -o /dev/null -w "%{redirect_url}" $url | xargs basename | cut -f1 -d';')
+    case "$action" in
+      selectsetupstep.action)
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mRunning Wizard\e[0m"
+        url=$base_url/console/setup/$action
+      ;;
+      setupdatabase.action)
+        [[ -z "$HAVE_DATABASE" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mDatabase\e[0m"
+        case "$CROWD_SETUP_DATABASE_DRIVER" in
+          postgresql)
+            CROWD_SETUP_DATABASE_DRIVER_CLASS=org.postgresql.Driver
+            CROWD_SETUP_DATABASE_DIALECT=org.hibernate.dialect.PostgreSQLDialect
+          ;;
+        esac
+        case "$CROWD_SETUP_DATABASE_TYPE" in
+          jdbc)
+            CROWD_SETUP_DATABASE_JDBC_URL="jdbc:$CROWD_SETUP_DATABASE_DRIVER://$CROWD_SETUP_DATABASE_SERVER:$CROWD_SETUP_DATABASE_PORT/$CROWD_SETUP_DATABASE_NAME"
+          ;;
+          jndi)
+            true
+          ;;
+        esac
+        curl -s -f "$base_url"/console/setup/setupdatabase\!update.action \
+          -d databaseOption="db.$CROWD_SETUP_DATABASE_TYPE" \
+          -d jdbcDatabaseType="$CROWD_SETUP_DATABASE_DRIVER" \
+          -d jdbcDriverClassName="$CROWD_SETUP_DATABASE_DRIVER_CLASS" \
+          -d jdbcUrl="$CROWD_SETUP_DATABASE_JDBC_URL" \
+          -d jdbcUsername="$CROWD_SETUP_DATABASE_USERNAME" \
+          -d jdbcPassword="$CROWD_SETUP_DATABASE_PASSWORD" \
+          -d jdbcHibernateDialect="$CROWD_SETUP_DATABASE_DIALECT" \
+          -d jdbcOverwriteData="$CROWD_SETUP_DATABASE_OVERWRITE" \
+          -d datasourceDatabaseType="$CROWD_SETUP_DATABASE_JNDI_TYPE" \
+          -d datasourceJndiName="$CROWD_SETUP_DATABASE_JNDI_NAME" \
+          -d datasourceHibernateDialect="$CROWD_SETUP_DATABASE_HIBERNATE_DIALECT"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_DATABASE=1
+      ;;
+      setupoptions.action)
+        [[ -z "$HAVE_OPTIONS" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mOptions\e[0m"
+        curl -s -f "$base_url"/console/setup/setupoptions\!update.action \
+          -d title="$CROWD_SETUP_SERVER_TITLE" \
+          -d sessionTime="$CROWD_SETUP_SESSION_TIME" \
+          -d baseURL="$CROWD_SETUP_BASEURL"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_OPTIONS=1
+      ;;
+      mailserver.action)
+        [[ -z "$HAVE_MAILSERVER" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mMailserver\e[0m"
+        curl -s -f "$base_url"/console/setup/mailserver\!update.action \
+          -d postponeConfiguration="$($CROWD_SETUP_MAILSERVER && echo false || echo true)" \
+          -d notificationEmail="$CROWD_SETUP_MAILSERVER_RECEIVER" \
+          -d from="$CROWD_SETUP_MAILSERVER_SENDER" \
+          -d prefix="$CROWD_SETUP_MAILSERVER_SUBJECT_PREFIX" \
+          -d jndiMailActive="$CROWD_SETUP_MAILSERVER_JNDI" \
+          -d host="$CROWD_SETUP_MAILSERVER_HOST" \
+          -d port="$CROWD_SETUP_MAILSERVER_PORT" \
+          -d username="$CROWD_SETUP_MAILSERVER_USERNAME" \
+          -d password="$CROWD_SETUP_MAILSERVER_PASSWORD" \
+          -d useSSL="$CROWD_SETUP_MAILSERVER_SSL" \
+          -d jndiLocation="$CROWD_SETUP_MAILSERVER_JNDI_LOCATION"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_MAILSERVER=1
+      ;;
+      directoryinternalsetup.action)
+        [[ -z "$HAVE_DIRECTORY" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mDirectory\e[0m"
+        curl -s -f "$base_url"/console/setup/directoryinternalsetup\!update.action \
+          -d name="$CROWD_SETUP_DIRECTORY_NAME" \
+          -d description="$CROWD_SETUP_DIRECTORY_DESCRIPTION" \
+          -d passwordRegex="$CROWD_SETUP_DIRECTORY_PASSWORD_REGEX" \
+          -d passwordComplexityMessage="$CROWD_SETUP_DIRECTORY_PASSWORD_COMPLEXITY_MESSAGE" \
+          -d passwordMaxAttempts="$CROWD_SETUP_DIRECTORY_PASSWORD_MAX_ATTEMPTS" \
+          -d passwordMaxChangeTime="$CROWD_SETUP_DIRECTORY_PASSWORD_MAX_CHANGE_TIME" \
+          -d passwordHistoryCount="$CROWD_SETUP_DIRECTORY_PASSWORD_HISTORY_COUNT" \
+          -d userEncryptionMethod="$CROWD_SETUP_DIRECTORY_USER_ENCRYPTION_METHOD"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_DIRECTORY=1
+      ;;
+      defaultadministrator.action)
+        [[ -z "$HAVE_ADMINISTRATOR" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mAdministrator\e[0m"
+        curl -s -f "$base_url"/console/setup/defaultadministrator\!update.action \
+          -d email="$CROWD_SETUP_ADMINISTRATOR_EMAIL" \
+          -d name="$CROWD_SETUP_ADMINISTRATOR_USERNAME" \
+          -d password="$CROWD_SETUP_ADMINISTRATOR_PASSWORD" \
+          -d passwordConfirm="$CROWD_SETUP_ADMINISTRATOR_PASSWORD" \
+          -d firstname="$CROWD_SETUP_ADMINISTRATOR_FIRSTNAME" \
+          -d lastname="$CROWD_SETUP_ADMINISTRATOR_LASTNAME"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_ADMINISTRATOR=1
+      ;;
+      integration.action)
+        [[ -z "$HAVE_INTEGRATION" ]] || break
+        echo -e "\e[1mCrowd Setup\e[0m \e[32mIntegrations\e[0m"
+        curl -s -f "$base_url"/console/setup/integration\!update.action \
+          -d configureOpenIDServer="$CROWD_SETUP_INTEGRATION_OPENID_SERVER" \
+          -d configureDemoApp="$CROWD_SETUP_INTEGRATION_DEMO_APPLICATION"
+        url=$base_url/console/setup/selectsetupstep.action
+        HAVE_INTEGRATION=1
+      ;;
+      *)
+        break
+      ;;
+    esac
+  done
+  apk del --no-cache .setup-deps
+  echo -e "\e[1mCrowd Properties has been updated!"
+  echo "Append the following variables to docker container environment:"
+  echo "CROWD_SSO_CROWD_APPLICATION_PASSWORD=$( grep application.password "$CROWD_HOME"/crowd.properties  | cut -f2 -d= | xargs)"
+  echo -e "\e[0m"
+
+
+}
+
+if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
+  main "$@"
+else
+  fix_permissions
+  create_crowd_home
+  create_crowd_config
+  create_crowd_autoconfigure
+
+  set -- JAVA_OPTS="$JAVA_OPTS -Dcrowd.home=$CROWD_HOME" "$@"
+fi

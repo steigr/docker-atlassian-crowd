@@ -1,0 +1,75 @@
+#!sh
+
+export JAVA_OPTS="$JAVA_OPTS $@"
+set -- JAVA_HOME="$JAVA_HOME" CATALINA_HOME="$CATALINA_HOME" CATALINA_TMPDIR="$CATALINA_TMPDIR" "$(command -v su-exec)" crowd /app/apache-tomcat/bin/catalina.sh run
+
+catalina_connector() {
+	local acceptcount connectiontimeout disableuploadtimeout enablelookups \
+	      maxhttpheadersize maxthreads minsparethreads port redirectport \
+	      usebodyencodingforuri uriencoding compression compressablemimetype \
+	      upgrade protocol secure proxyname proxyport scheme
+	acceptCount=${acceptcount:-100}
+	connectionTimeout=${connectiontimeout:-20000}
+	disableUploadTimeout=${disableuploadtimeout:-true}
+	enableLookups=${enablelookups:-false}
+	maxHttpHeaderSize=${maxhttpheadersize:-8192}
+	maxThreads=${maxthreads:-150}
+	minSpareThreads=${minsparethreads:-25}
+	port=${port:-8095}
+	redirectPort=${redirectport:-8443}
+	useBodyEncodingForURI=${usebodyencodingforuri:-true}
+	URIEncoding=${uriencoding:-UTF-8}
+	compression=${compression:-on}
+	compressableMimeType=${compressablemimetype:-text/html,text/xml,application/xml,text/plain,text/css,application/json,application/javascript,application/x-javascript}
+	protocol=${protocol:=HTTP/1.1}
+	secure=${secure:-false}
+	proxyName=${proxyname:-localhost}
+	proxyPort=${proxyport:-$port}
+	scheme=${scheme:-http}
+	[[ "$upgrade" = "http2" ]] && upgrade="$(printf '  <UpgradeProtocol className="org.apache.coyote.http2.Http2Protocol"/>\n  ')" || upgrade=""
+	cat<<catalina_connector_preset
+      <Connector acceptCount="$acceptCount"
+                 protocol="$protocol"
+                 connectionTimeout="$connectionTimeout"
+                 disableUploadTimeout="$disableUploadTimeout"
+                 enableLookups="$enableLookups"
+                 maxHttpHeaderSize="$maxHttpHeaderSize"
+                 maxThreads="$maxThreads"
+                 minSpareThreads="$minSpareThreads"
+                 port="$port"
+                 redirectPort="$redirectPort"
+                 useBodyEncodingForURI="$useBodyEncodingForURI"
+                 URIEncoding="$URIEncoding"
+                 secure="$secure"
+                 proxyPort="$proxyPort"
+                 proxyName="$proxyName"
+                 scheme="$scheme"
+                 compression="$compression"
+                 compressableMimeType="$compressableMimeType">
+	$upgrade      </Connector>
+catalina_connector_preset
+}
+
+CATALINA_CONNECTOR_DIRTY=true
+printenv | grep CATALINA_CONNECTOR_ | cut -f3 -d_ | sort | uniq | while read connector_id; do
+	
+	if $CATALINA_CONNECTOR_DIRTY; then
+		# delete single-line connector definitions
+		sed '/<Connector.*\/>/d' -i /app/apache-tomcat/conf/server.xml
+		# delete multil-line connector definitions
+		sed '/<Connector/,/\/>/d' -i /app/apache-tomcat/conf/server.xml
+		CATALINA_CONNECTOR_DIRTY=false
+	fi
+	vars=$(printenv | grep CATALINA_CONNECTOR_${connector_id} | cut -f4- -d_ | while read var; do
+	  val="${var#*=}"
+	  var="${var%%=*}"
+	  var="$(echo $var | sed -e 's/_/-/g' | tr '[:upper:]' '[:lower:]')"
+	  echo "$var=$val"
+  done)
+	echo -e "\e[1mApache Tomcat\e[0m \e[32mConnector\e[0m \e[1m$connector_id\e[0m => \e[1m\e[34m$(echo $vars | tr ' ' ',')\e[0m"
+	eval $vars catalina_connector > $$.connector
+  sed "/<Service/r $$.connector" -i "$CATALINA_HOME/conf/server.xml"
+  rm $$.connector
+done
+
+[[ -z "$TRACE" ]] || cat "$CATALINA_HOME/conf/server.xml"
