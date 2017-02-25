@@ -63,6 +63,7 @@ create_crowd_autoconfigure() {
 main() {
   exec >/proc/1/fd/1 2>/proc/1/fd/2
   set -eo pipefail
+  [[ -z "$TRACE" ]] || set -x
   sleep 10
   base_url=http://localhost:8095/crowd
   url=$base_url/console/login.action
