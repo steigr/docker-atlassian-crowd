@@ -72,9 +72,9 @@ main() {
   exec >/proc/1/fd/1 2>/proc/1/fd/2
   set -eo pipefail
   [[ -z "$TRACE" ]] || set -x
-  sleep 10
   base_url=http://localhost:8095/crowd
   url=$base_url/console/login.action
+  curl -s -o /dev/null --retry 30 --retry-connrefused --retry-delay 2 --retry-max-time 60 "$url"
   while true; do
     action=$(curl -s -o /dev/null -w "%{redirect_url}" $url | xargs basename | cut -f1 -d';')
     case "$action" in
@@ -187,10 +187,8 @@ main() {
   apk del --no-cache .setup-deps
   echo -e "\e[1mCrowd Properties has been updated!"
   echo "Append the following variables to docker container environment:"
-  echo "CROWD_SSO_CROWD_APPLICATION_PASSWORD=$( grep application.password "$CROWD_HOME"/crowd.properties  | cut -f2 -d= | xargs)"
+  echo "CROWD_SSO_APP_CROWD_APPLICATION_PASSWORD=$( grep application.password "$CROWD_HOME"/crowd.properties  | cut -f2 -d= | xargs)"
   echo -e "\e[0m"
-
-
 }
 
 if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
