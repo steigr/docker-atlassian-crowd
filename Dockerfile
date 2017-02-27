@@ -33,4 +33,3 @@ ADD scripts/main /main
 ADD scripts/vars /vars
 ADD scripts/crowd-sso-configurator /crowd-sso-configurator
 ADD scripts/crowd-configurator     /crowd-configurator
-

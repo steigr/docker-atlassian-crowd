@@ -8,8 +8,8 @@ crowd_setup_step_in_config() {
 
 crowd_setup_step() {
   local step=setuplicense
-  if [[ "${CROWD_SERVER_ID:+x}" ]]; then
-    if [[ "${CROWD_LICENSE:+x}" ]]; then
+  if [[ "${SERVER_ID:+x}" ]]; then
+    if [[ "${LICENSE:+x}" ]]; then
       if [[ -f "$CROWD_HOME/crowd.properties" ]]; then
         step=setupdatabase
       else
@@ -37,8 +37,8 @@ create_crowd_config() {
 <application-configuration>
   <buildNumber>0</buildNumber>
   <properties>
-    $(property crowd.server.id $CROWD_SERVER_ID   )
-    $(property license         $CROWD_LICENSE )
+    $(property crowd.server.id $SERVER_ID )
+    $(property license         $LICENSE   )
   </properties>
   <setupStep>$(crowd_setup_step)</setupStep>
   <setupType>$(crowd_setup_type)</setupType>
@@ -57,8 +57,8 @@ create_crowd_home() {
 }
 
 create_crowd_autoconfigure() {
-  [[ "$CROWD_SERVER_ID" ]] || return 0
-  [[ "$CROWD_LICENSE" ]] || return 0
+  [[ "$SERVER_ID" ]] || return 0
+  [[ "$LICENSE" ]] || return 0
   [[ "$(crowd_setup_step)" = "setupdatabase" ]] || return 0
   [[ "$CROWD_SETUP" = "true" ]] || return 0
   [[ ! "$(crowd_setup_step_in_config)" = "finishsetup" ]] || return 0
