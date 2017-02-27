@@ -8,8 +8,8 @@ crowd_setup_step_in_config() {
 
 crowd_setup_step() {
   local step=setuplicense
-  if [[ "${CROWD_SERVER_ID:+x}" ]]; then
-    if [[ "${CROWD_LICENSE:+x}" ]]; then
+  if [[ "${SERVER_ID:+x}" ]]; then
+    if [[ "${LICENSE:+x}" ]]; then
       if [[ -f "$CROWD_HOME/crowd.properties" ]]; then
         step=setupdatabase
       else
@@ -37,8 +37,8 @@ create_crowd_config() {
 <application-configuration>
   <buildNumber>0</buildNumber>
   <properties>
-    $(property crowd.server.id $CROWD_SERVER_ID   )
-    $(property license         $CROWD_LICENSE )
+    $(property crowd.server.id $SERVER_ID )
+    $(property license         $LICENSE   )
   </properties>
   <setupStep>$(crowd_setup_step)</setupStep>
   <setupType>$(crowd_setup_type)</setupType>
@@ -57,8 +57,8 @@ create_crowd_home() {
 }
 
 create_crowd_autoconfigure() {
-  [[ "$CROWD_SERVER_ID" ]] || return 0
-  [[ "$CROWD_LICENSE" ]] || return 0
+  [[ "$SERVER_ID" ]] || return 0
+  [[ "$LICENSE" ]] || return 0
   [[ "$(crowd_setup_step)" = "setupdatabase" ]] || return 0
   [[ "$CROWD_SETUP" = "true" ]] || return 0
   [[ ! "$(crowd_setup_step_in_config)" = "finishsetup" ]] || return 0
@@ -72,9 +72,9 @@ main() {
   exec >/proc/1/fd/1 2>/proc/1/fd/2
   set -eo pipefail
   [[ -z "$TRACE" ]] || set -x
-  sleep 10
   base_url=http://localhost:8095/crowd
   url=$base_url/console/login.action
+  curl -s -o /dev/null --retry 30 --retry-connrefused --retry-delay 2 --retry-max-time 60 "$url"
   while true; do
     action=$(curl -s -o /dev/null -w "%{redirect_url}" $url | xargs basename | cut -f1 -d';')
     case "$action" in
@@ -187,10 +187,8 @@ main() {
   apk del --no-cache .setup-deps
   echo -e "\e[1mCrowd Properties has been updated!"
   echo "Append the following variables to docker container environment:"
-  echo "CROWD_SSO_CROWD_APPLICATION_PASSWORD=$( grep application.password "$CROWD_HOME"/crowd.properties  | cut -f2 -d= | xargs)"
+  echo "CROWD_SSO_APP_CROWD_APPLICATION_PASSWORD=$( grep application.password "$CROWD_HOME"/crowd.properties  | cut -f2 -d= | xargs)"
   echo -e "\e[0m"
-
-
 }
 
 if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then

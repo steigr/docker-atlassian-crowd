@@ -8,11 +8,13 @@ RUN  addgroup -S $APPLICATION_USER \
  &&  install -D -d -o $APPLICATION_USER -g $APPLICATION_USER /app \
  &&  curl -L https://www.atlassian.com/software/crowd/downloads/binary/atlassian-crowd-2.11.0.tar.gz \
      | su-exec $APPLICATION_USER tar -x -z -C /app --strip-components=1 \
- && sed -e 's#=.*atlassian-crowd-openid-server\.log#=/app/apache-tomcat/logs/atlassian-crowd-openid-server.log#g' \
+ &&  sed -e 's#=.*atlassian-crowd-openid-server\.log#=/app/apache-tomcat/logs/atlassian-crowd-openid-server.log#g' \
         -i /app/crowd-openidserver-webapp/WEB-INF/classes/log4j.properties \
  &&  curl -L http://archive.apache.org/dist/tomcat/tomcat-8/v8.5.11/bin/apache-tomcat-8.5.11.tar.gz \
      | su-exec $APPLICATION_USER tar -x -z -v -C /app/apache-tomcat --strip-components=1 --wildcards 'apache-tomcat-8.5.11/bin/*' 'apache-tomcat-8.5.11/lib/*' \
- &&  sed '/JasperListener/d' -i /app/apache-tomcat/conf/server.xml \
+ &&  xml c14n --without-comments /app/apache-tomcat/conf/server.xml | xml fo -s 2 > /app/apache-tomcat/conf/server.xml.tmp \
+ &&  mv /app/apache-tomcat/conf/server.xml.tmp /app/apache-tomcat/conf/server.xml \
+ &&  xml ed -L -d '/Server/Listener[@className="org.apache.catalina.core.JasperListener"]' /app/apache-tomcat/conf/server.xml \
  &&  curl -Lo /app/apache-tomcat/lib/hsqldb-2.3.4.jar http://central.maven.org/maven2/org/hsqldb/hsqldb/2.3.4/hsqldb-2.3.4.jar \
  &&  curl -Lo /app/apache-tomcat/lib/postgresql-42.0.0.jar https://jdbc.postgresql.org/download/postgresql-42.0.0.jar \
  &&  sed -e 's#maxActive#maxTotal#' -i /app/apache-tomcat/conf/Catalina/localhost/crowd.xml \
@@ -33,4 +35,3 @@ ADD scripts/main /main
 ADD scripts/vars /vars
 ADD scripts/crowd-sso-configurator /crowd-sso-configurator
 ADD scripts/crowd-configurator     /crowd-configurator
-

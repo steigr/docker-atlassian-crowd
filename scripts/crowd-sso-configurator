@@ -1,22 +1,68 @@
 #!sh
 
-printenv | grep CROWD_SSO_ | cut -f3 -d_ | sort | uniq | while read application; do
-	properties_var="CROWD_SSO_PROPERTIES_$application"
+crowd_sso_setup_log() {
+	local app="$1"; [[ $# -le 0 ]] || shift
+	printf '\e[1mCrowd SSO\e[0m \e[32mApplication\e[0m \e[1m%s\e[0m => %s\n' "$app" "$@"
+}
+
+crowd_sso_property_file() {
+	local properties_var properties
+	properties_var="CROWD_SSO_PROPERTIES_$1"
 	properties="${!properties_var}"
-	properties="$(realpath "$properties" 2>/dev/null || echo "$properties")"
+	realpath "$properties" 2>/dev/null || echo "$properties"
+}
+
+crowd_sso_applications() {
+	printenv | grep CROWD_SSO_APP_ | cut -f4 -d_ | sort | uniq	
+}
+
+crowd_sso_overwrite() {
+	local overwrite_var overwrite application="$1"
 	overwrite_var="CROWD_SSO_PROPERTIES_${application}_OVERWRITE"
 	overwrite="${!overwrite_var}"
-	[[ "$properties" ]] || continue
-	$overwrite || continue
-	[[ ! "$application" = "CROWD" ]] \
-	|| [[ ! -f "$properties" ]] \
-	|| [[ ! "$CROWD_SSO_CROWD_APPLICATION_PASSWORD" = "password" ]] \
-	|| continue
-	echo -e "\e[1mCrowd SSO\e[0m \e[32mApplication\e[0m \e[1m$application\e[0m => $properties"
-	printenv | grep CROWD_SSO_${application} | cut -f4- -d_ | while read var; do
+	overwrite="${overwrite:-true}"
+	$overwrite
+}
+
+crowd_sso_crowd_properties() {
+	local val var
+	printenv | grep "CROWD_SSO_APP_${1}_" | cut -f5- -d_ | while read var; do
 		  val="${var#*=}"
 		  var="${var%%=*}"
 		  var="$(echo $var | sed -e 's/_/./g' | tr '[:upper:]' '[:lower:]')"
 		  echo "$var=$val"
-	done | install -D -m 0644 -o crowd -g crowd /dev/stdin "$properties"
+	done
+}
+
+crowd_sso_seraph_authenticator() {
+	local application="$1"
+	var="CROWD_SSO_SERAPH_${application}"
+	val="${!var}"
+	# check if path is given
+	[[ "$val" ]] || return 0
+	# check if authenticator class is set
+	[[ "$CROWD_SSO_SERAPH_CLASS" ]] || return 0
+	# canonicalization, formatting and update authenticator class
+	crowd_sso_setup_log "$application" "Using $CROWD_SSO_SERAPH_CLASS as authenticator in $val" >&2
+	xml c14n --without-comments "$val" \
+	| xml fo -s 2 \
+	| xml ed \
+		-d '/security-config/authenticator' \
+		-s '/security-config' -t elem -n authenticator -v '' \
+		-i '/security-config/authenticator' -t attr -n class -v "$CROWD_SSO_SERAPH_CLASS" \
+	> "$val.tmp" \
+	&& mv "$val.tmp" "$val"
+}
+
+crowd_sso_applications | while read application; do
+	properties="$(crowd_sso_property_file $application)"
+	[[ "$properties" ]]  || continue
+	if crowd_sso_overwrite "$application"; then
+		crowd_sso_setup_log "$application" "Create $properties"
+		crowd_sso_crowd_properties "$application" \
+		| install -D -m 0644 -o $APPLICATION_USER -g $APPLICATION_USER /dev/stdin "$properties"
+		crowd_sso_seraph_authenticator "$application"
+	fi
 done
+
+[[ $(crowd_sso_applications | wc -w) -ne 1 ]] || export JAVA_OPTS="$JAVA_OPTS -Dcrowd.properties=$(crowd_sso_property_file $(crowd_sso_applications))"
