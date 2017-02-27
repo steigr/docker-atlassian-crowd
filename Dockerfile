@@ -1,4 +1,4 @@
-FROM steigr/java:8_server-jre_unlimited
+FROM steigr/tomcat:latest
 
 ENV  APPLICATION_USER crowd
 
@@ -10,13 +10,14 @@ RUN  addgroup -S $APPLICATION_USER \
      | su-exec $APPLICATION_USER tar -x -z -C /app --strip-components=1 \
  &&  sed -e 's#=.*atlassian-crowd-openid-server\.log#=/app/apache-tomcat/logs/atlassian-crowd-openid-server.log#g' \
         -i /app/crowd-openidserver-webapp/WEB-INF/classes/log4j.properties \
- &&  curl -L http://archive.apache.org/dist/tomcat/tomcat-8/v8.5.11/bin/apache-tomcat-8.5.11.tar.gz \
-     | su-exec $APPLICATION_USER tar -x -z -v -C /app/apache-tomcat --strip-components=1 --wildcards 'apache-tomcat-8.5.11/bin/*' 'apache-tomcat-8.5.11/lib/*' \
+ &&  tomcat-install /app/apache-tomcat $APPLICATION_USER \
  &&  xml c14n --without-comments /app/apache-tomcat/conf/server.xml | xml fo -s 2 > /app/apache-tomcat/conf/server.xml.tmp \
  &&  mv /app/apache-tomcat/conf/server.xml.tmp /app/apache-tomcat/conf/server.xml \
  &&  xml ed -L -d '/Server/Listener[@className="org.apache.catalina.core.JasperListener"]' /app/apache-tomcat/conf/server.xml \
- &&  curl -Lo /app/apache-tomcat/lib/hsqldb-2.3.4.jar http://central.maven.org/maven2/org/hsqldb/hsqldb/2.3.4/hsqldb-2.3.4.jar \
- &&  curl -Lo /app/apache-tomcat/lib/postgresql-42.0.0.jar https://jdbc.postgresql.org/download/postgresql-42.0.0.jar \
+ &&  hsqldb_version=$(curl -sL http://central.maven.org/maven2/org/hsqldb/hsqldb/maven-metadata.xml | xml sel --net --template --value-of '/metadata/versioning/latest' ) \
+ &&  curl -Lo /app/apache-tomcat/lib/hsqldb-$hsqldb_version.jar http://central.maven.org/maven2/org/hsqldb/hsqldb/$hsqldb_version/hsqldb-$hsqldb_version.jar \
+ &&  postgresql_version=$(curl -sL https://repo1.maven.org/maven2/org/postgresql/postgresql/maven-metadata.xml | xml sel --net --template --value-of '/metadata/versioning/latest' | sed -e 's@\.jre.*@@') \
+ &&  curl -Lo /app/apache-tomcat/lib/postgresql-$postgresql_version.jar https://jdbc.postgresql.org/download/postgresql-$postgresql_version.jar \
  &&  sed -e 's#maxActive#maxTotal#' -i /app/apache-tomcat/conf/Catalina/localhost/crowd.xml \
  &&  sed -e 's#maxActive#maxTotal#' -i /app/apache-tomcat/conf/Catalina/localhost/openidserver.xml \
  &&  apk del .build-deps \
