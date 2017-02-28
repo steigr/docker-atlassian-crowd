@@ -1,7 +1,6 @@
 #!sh
 
 # System specific
-
 export TIMEZONE="${TIMEZONE:-UTC}"
 
 # Atlassian Crowd
