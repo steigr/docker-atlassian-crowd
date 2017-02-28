@@ -54,7 +54,7 @@ crowd_sso_seraph_authenticator() {
 	&& mv "$val.tmp" "$val"
 }
 
-crowd_sso_applications | while read application; do
+for application in $(crowd_sso_applications); do
 	properties="$(crowd_sso_property_file $application)"
 	[[ "$properties" ]]  || continue
 	if crowd_sso_overwrite "$application"; then
