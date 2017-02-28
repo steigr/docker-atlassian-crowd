@@ -3,12 +3,17 @@
 # System specific
 export TIMEZONE="${TIMEZONE:-UTC}"
 
+# Always bind at least 127.0.0.1:8095
+printenv | grep -q ^CATALINA_CONNECTOR_ \
+&& export CATALINA_CONNECTOR_8095_address=${CATALINA_CONNECTOR_8095_address:-127.0.0.1} \
+|| true
+
 # Atlassian Crowd
 export CROWD_HOME="${CROWD_HOME:-/crowd}"
 export CROWD_SERVER_ID="${CROWD_SERVER_ID}"
 
 # Automatic Setup
-export CROWD_SETUP="${CROWD_SETUP:-true}"
+export CROWD_SETUP="${CROWD_SETUP:-false}"
 
 export CROWD_SETUP_DATABASE_TYPE="${CROWD_SETUP_DATABASE_TYPE:-embedded}"
 export CROWD_SETUP_DATABASE_ENGINE="${CROWD_SETUP_DATABASE_ENGINE:-postgresql}"
