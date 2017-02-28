@@ -1,2 +1,2 @@
-crowd.env
-/Dockerfile.build
+*.env
+Dockerfile.build
